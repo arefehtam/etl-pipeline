@@ -1,6 +1,9 @@
-import os
 import click
+import findspark
+import os
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import concat_ws, split, trim
+from pyspark.sql.functions import unix_timestamp, from_unixtime
 
 
 def init_spark_connection(appname, sparkmaster, minio_url,
@@ -18,6 +21,7 @@ def init_spark_connection(appname, sparkmaster, minio_url,
     Return:
          sc: spark connection object
     """
+    findspark.init()
     sc = SparkSession \
         .builder \
         .appName(appname) \
@@ -47,7 +51,7 @@ def extract(sc, bucket_name, raw_data_path):
     """
 
     return sc.read.json('s3a://' + os.path.os.path.join(bucket_name,
-                                                       raw_data_path))
+                                                        raw_data_path))
 
 
 def transform(df):
@@ -60,7 +64,35 @@ def transform(df):
         df: processed dataframe
     """
     # todo: write the your code here
-    return df
+    df_select = df.select("message.id", "message.id_str", "message.name", "message.screen_name", "message.location",
+                          "message.description", "message.url", "message.protected", "message.followers_count",
+                          "message.friends_count", "message.listed_count", "message.created_at",
+                          "message.favourites_count",
+                          "message.statuses_count", "message.status.lang", "message.profile_image_url_https",
+                          "timestamp")
+
+    df_without_duplicate = df_select.dropDuplicates(subset=['id'])
+    df_without_space = df_without_duplicate.withColumn("name", trim(df_without_duplicate.name))
+    df_without_space = df_without_space.withColumn("description", trim(df_without_space.description))
+    df_without_space = df_without_space.withColumn("location", trim(df_without_space.location))
+    df_without_space = df_without_space.withColumn("url", trim(df_without_space.url))
+
+    split_col = split(df_select['created_at'], ' ')
+    df_without_space = df_without_space.withColumn('created_at_date',
+                                                   concat_ws('-',
+                                                             split_col.getItem(5),
+                                                             split_col.getItem(1),
+                                                             split_col.getItem(2)
+                                                             )
+                                                   )
+    df_final = df_without_space.withColumn("created_at_date",
+                                           from_unixtime(
+                                               unix_timestamp(df_without_space.created_at_date, 'yyyy-MMM-dd'),
+                                               'yyyy-MM-dd'
+                                           )
+                                           )
+
+    return df_final
 
 
 def load(df, bucket_name, processed_data_path):
@@ -95,7 +127,6 @@ def load(df, bucket_name, processed_data_path):
 def main(appname, sparkmaster, minio_url,
          minio_access_key, minio_secret_key,
          bucket_name, raw_data_path, processed_data_path):
-
     sc = init_spark_connection(appname, sparkmaster, minio_url,
                                minio_access_key, minio_secret_key)
 
