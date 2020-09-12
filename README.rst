@@ -17,7 +17,6 @@ Getting Started
     Start hadoop
     Start MinIO
     Copy appropriate jar files in spark jar folders to be able to connect to `hdfs`
-
 2. Prepare data
    You should put users and tweets json files in MinIO. Ido this through `hdfs` and python code:
     .. code-block:: python
@@ -27,7 +26,7 @@ Getting Started
         df = sc.read.json("hdfs://localhost:9000/user/my_user/*.json")
    Create a path in minio and write json files into it:
 
- .. code-block:: python
+    .. code-block:: python
 
         df.write.json("s3a://data/raw/tweets")
         df.write.json("s3a://data/raw/users")
