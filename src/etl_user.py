@@ -2,8 +2,7 @@ import click
 import findspark
 import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import concat_ws, split, trim
-from pyspark.sql.functions import unix_timestamp, from_unixtime
+from pyspark.sql.functions import concat_ws, split, trim, unix_timestamp, from_unixtime
 
 
 def init_spark_connection(appname, sparkmaster, minio_url,
@@ -64,6 +63,9 @@ def transform(df):
         df: processed dataframe
     """
     # todo: write the your code here
+    # Select the following fields; id, id_str, name, screen_name, location, description, url, protected,
+    # followers_count, friends_count, listed_count, created_at, favourites_count, statuses_count, lang,
+    # profile_image_url_https, timestamp.
     df_select = df.select("message.id", "message.id_str", "message.name", "message.screen_name", "message.location",
                           "message.description", "message.url", "message.protected", "message.followers_count",
                           "message.friends_count", "message.listed_count", "message.created_at",
@@ -71,12 +73,16 @@ def transform(df):
                           "message.statuses_count", "message.status.lang", "message.profile_image_url_https",
                           "timestamp")
 
+    # Remove duplicate users
     df_without_duplicate = df_select.dropDuplicates(subset=['id'])
+
+    # Remove space characters from description, name, location, and URL fields.
     df_without_space = df_without_duplicate.withColumn("name", trim(df_without_duplicate.name))
     df_without_space = df_without_space.withColumn("description", trim(df_without_space.description))
     df_without_space = df_without_space.withColumn("location", trim(df_without_space.location))
     df_without_space = df_without_space.withColumn("url", trim(df_without_space.url))
 
+    # Convert created_at field to DateTime with (year-month-day) format.
     split_col = split(df_select['created_at'], ' ')
     df_without_space = df_without_space.withColumn('created_at_date',
                                                    concat_ws('-',
